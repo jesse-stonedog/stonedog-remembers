@@ -1,7 +1,7 @@
 [project]
 name = "roz-remembers"
-version = "0.1.0"
-description = "State management library for Python"
+version = "0.2.0"
+description = "State management library for Python (async RozRemembers + synchronous Store)"
 authors = [
     {name = "Jesse Stone",email = "jesse@stonedogcode.com"}
 ]
