@@ -1,64 +1,94 @@
-# roz-remembers: A Message-Driven State Management Library
+# roz-remembers
 
----
+A small, message-driven state management library for Python, inspired by the
+predictable state-container pattern popularized by Redux. It gives you a
+**centralized, observable bag of state** that you read and write through simple
+**dot-path** keys (e.g. `"job.bins"`), with change events you can subscribe to
+and optional JSON persistence.
 
-roz-remembers is a lightweight, message-driven state management library for Python, inspired by the predictable state container pattern popularized by Redux in the JavaScript ecosystem. It's designed to provide a **centralized, immutable state** that can be updated solely through **explicit, descriptive actions**, making your application's state changes predictable, traceable, and easier to debug.
+It ships **two front ends over the same dot-path engine**:
 
-## Features
+* **`Store`** — a *synchronous* store. Best for ordinary synchronous code that
+  just wants central, observable runtime state without an event loop.
+* **`RozRemembers`** — an *asyncio*, Redux-style store driven by an action queue
+  and an event queue. Best for long-running async applications.
 
-* **Centralized State:** A single source of truth for your application's state, making it easy to understand and manage.
-* **Immutable State:** State is never directly modified. Instead, actions produce new state instances, ensuring data integrity and simplifying change detection.
-* **Message-Driven:** All state changes are triggered by dispatching "actions"—plain Python dictionaries describing what happened.
-* **Predictable Changes:** Because state changes are a result of explicit actions, it's easy to predict the outcome of any operation.
-* **Asynchronous Processing:** Built with `asyncio` to handle actions in a non-blocking, concurrent manner.
-* **Initial State Loading:** Supports loading initial state from a JSON file, ideal for configuration or bootstrapping.
-* **Action Listeners:** Allows registration of functions that react to specific action types, enabling side effects or complex logic outside the core state update.
+Both share the exported helpers `get_nested_value(path, data)` and
+`set_nested_value(path, value, data)`.
 
 ## Installation
-
-Roz-Remembers can be installed using [Poetry](https://python-poetry.org/):
-
-```bash
-poetry add roz-remembers
-```
-
-Or [PIP](https://pypi.org/project/pip/):
 
 ```bash
 pip install roz-remembers
 ```
 
-## Two front ends
+The import name is `roz_remembers`:
 
-The library exposes the same dot-path state engine through two APIs.
+```python
+from roz_remembers import Store, RozRemembers, get_nested_value, set_nested_value
+```
 
-### `Store` — synchronous (recommended for sync apps)
+## Dot-path convention
 
-A simple, observable bag of state for code that does **not** run an asyncio
-event loop (for example, the card-sorter device loop):
+State is a nested dict, and every read/write addresses a value by a
+dot-separated `path`:
+
+* `"user.theme"` → `state["user"]["theme"]`
+* numeric segments index into lists: `"items.0.name"` → `state["items"][0]["name"]`
+* **reads** of a missing or non-traversable path return `None`
+  (or your supplied default on `Store.get`).
+* **writes** auto-create intermediate dicts as needed. A write fails
+  (returns `False`) only if a segment can't be traversed or assigned — e.g. a
+  list index out of range, or trying to descend into a scalar.
+
+## Quickstart — `Store` (synchronous)
 
 ```python
 from roz_remembers import Store
 
 store = Store({"job": {"bins": 10, "sorted": 0}})
 
-store.set("job.sorted", 1)          # dot-path set, returns True/False
-store.get("job.sorted")             # -> 1
-store.get("job.missing", default=0) # -> 0
+# read / write by dot-path
+store.set("job.sorted", 1)            # -> True
+store.get("job.sorted")               # -> 1
+store.get("job.missing", default=0)   # -> 0 (missing path falls back)
 
-# observe changes
-unsubscribe = store.subscribe(lambda e: print(e["path"], "->", e["new_value"]))
-store.set("machine.state", "CARD_READY")   # auto-creates intermediate dicts
+# writes auto-create intermediate dicts
+store.set("machine.state", "CARD_READY")
+store.get_state()                     # deep copy of the whole state
 
-# optional JSON persistence
-store.save("state.json")
-restored = Store(state_file="state.json")
+# subscribe to change events; subscribe() returns an unsubscribe function
+def on_change(event):
+    print(event["path"], event["old_value"], "->", event["new_value"])
+
+unsubscribe = store.subscribe(on_change)
+store.set("job.sorted", 2)            # -> on_change fires
+unsubscribe()                         # stop receiving events
 ```
 
-### `RozRemembers` — asynchronous (Redux-style)
+### Persistence
 
-The original `asyncio`, action/event-queue store for long-running async
-applications:
+`Store` reads and writes plain JSON:
+
+```python
+store.save("state.json")                 # write current state to disk
+restored = Store(state_file="state.json")  # load state at construction
+restored.get("job.bins")                 # -> 10
+
+# a Store created with state_file remembers it, so save() needs no argument
+live = Store(state_file="state.json")
+live.set("job.sorted", 5)
+live.save()                              # persists back to state.json
+```
+
+Loading a missing file or malformed JSON starts from an empty state (a warning
+is logged) rather than raising, so a first run "just works".
+
+## Quickstart — `RozRemembers` (asynchronous)
+
+`RozRemembers` processes **actions** off a queue and emits **events** onto
+another queue. You dispatch `SET_STATE` actions and consume `STATE_CHANGED`
+events.
 
 ```python
 import asyncio
@@ -66,29 +96,53 @@ from roz_remembers import RozRemembers
 
 async def main():
     store = RozRemembers("initial_state.json")
-    await store.load_initial_state()
-    store.start_processing()
+    await store.load_initial_state()      # empty state if the file is absent
+    store.start_processing()              # start the background action processor
 
-    await store.dispatch({"type": "SET_STATE", "path": "user.theme", "value": "dark"})
-    await asyncio.sleep(0.05)
-    print(store.get_current_state())
+    # observe state changes
+    events = store.subscribe_events()     # an asyncio.Queue of event dicts
+
+    await store.dispatch({
+        "type": RozRemembers.ACTION_TYPE_SET_STATE,   # "SET_STATE"
+        "path": "user.theme",
+        "value": "dark",
+    })
+
+    event = await events.get()
+    # {'type': 'STATE_CHANGED', 'path': 'user.theme',
+    #  'old_value': None, 'new_value': 'dark', 'action_source': {...}}
+    print(event["path"], "->", event["new_value"])
+    print(store.get_current_state())      # deep copy of the whole state
 
     await store.stop_processing()
 
 asyncio.run(main())
 ```
 
-Both stores share the dot-path helpers `get_nested_value(path, data)` and
-`set_nested_value(path, value, data)`, which are also exported for direct use.
+### The subscribe / events model
+
+* **`Store`** notifies **synchronously**: each `set()` that changes state calls
+  every subscriber callback with a `STATE_CHANGED` event
+  (`{"type", "path", "old_value", "new_value"}`). A raising subscriber is
+  logged and isolated — it won't break the store or other subscribers.
+* **`RozRemembers`** is **asynchronous**: `subscribe_events()` returns an
+  `asyncio.Queue`. Each applied `SET_STATE` puts a `STATE_CHANGED` event (which
+  also carries `action_source`) on that queue for your consumer coroutine to
+  `await`. Actions with no `path`, unknown action types, and writes that can't
+  be applied are ignored and emit no event.
 
 ## Development
 
+This is a Poetry (PEP 621) project. Tests run under pytest with a coverage gate:
+
 ```bash
-pip install pytest pytest-asyncio
-PYTHONPATH=src pytest
+pip install pytest pytest-asyncio pytest-cov
+pytest        # runs the suite and enforces >=90% line coverage
 ```
+
+`pythonpath = ["src"]` is set in `pyproject.toml`, so tests import
+`roz_remembers` directly without a manual `PYTHONPATH`.
 
 ## License
 
 MIT
-
