@@ -4,7 +4,7 @@ import copy
 import json
 import pytest
 
-from roz_remembers import RozRemembers
+from stonedog_remembers import StonedogRemembers
 
 
 INITIAL_STATES = {
@@ -51,7 +51,7 @@ INITIAL_STATES = {
 @pytest.mark.asyncio
 async def test_basic_state(tmp_path):
     """
-    Tests the basic lifecycle of RozRemembers using the "BASIC" initial state.
+    Tests the basic lifecycle of StonedogRemembers using the "BASIC" initial state.
     """
     # Create a temporary JSON file for this specific test
     initial_state_file = tmp_path / "basic_state.json"
@@ -59,7 +59,7 @@ async def test_basic_state(tmp_path):
         json.dump(INITIAL_STATES["BASIC"], f, indent=2)
 
     # Initialize and load state
-    store = RozRemembers(initial_state_file_path=str(initial_state_file))
+    store = StonedogRemembers(initial_state_file_path=str(initial_state_file))
     await store.load_initial_state()
     store.start_processing()
 
@@ -90,7 +90,7 @@ async def test_basic_state(tmp_path):
 @pytest.mark.asyncio
 async def test_complex_state(tmp_path):
     """
-    Tests a lifecycle of RozRemembers using the "GAMEWORLD" initial state.
+    Tests a lifecycle of StonedogRemembers using the "GAMEWORLD" initial state.
     """
     # Create a temporary JSON file for this specific test
     initial_state_file = tmp_path / "gameworld_state.json"
@@ -98,7 +98,7 @@ async def test_complex_state(tmp_path):
         json.dump(INITIAL_STATES["GAMEWORLD"], f, indent=2)
 
     # Initialize and load state
-    store = RozRemembers(initial_state_file_path=str(initial_state_file))
+    store = StonedogRemembers(initial_state_file_path=str(initial_state_file))
     await store.load_initial_state()
     store.start_processing()
 
@@ -133,7 +133,7 @@ async def test_complex_state(tmp_path):
     print(f"\nTest 'test_gameworld_lifecycle' completed. Final state:\n{json.dumps(store.get_current_state(), indent=2)}")
 
 # To run these tests:
-# 1. Save the above code as a Python file, e.g., `test_rozremembers.py`.
+# 1. Save the above code as a Python file, e.g., `test_stonedogremembers.py`.
 # 2. Make sure you have pytest installed: `pip install pytest pytest-asyncio`
 # 3. Run pytest from your terminal in the same directory: `pytest -s -v`
 #    (-s to see print statements, -v for verbose output)

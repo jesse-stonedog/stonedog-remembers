@@ -2,7 +2,7 @@
 
 import json
 
-from roz_remembers import Store, get_nested_value, set_nested_value
+from stonedog_remembers import Store, get_nested_value, set_nested_value
 
 
 def test_set_and_get():

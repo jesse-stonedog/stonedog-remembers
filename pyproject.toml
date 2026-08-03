@@ -1,7 +1,7 @@
 [project]
-name = "roz-remembers"
-version = "0.2.0"
-description = "State management library for Python (async RozRemembers + synchronous Store)"
+name = "stonedog-remembers"
+version = "0.3.0"
+description = "State management library for Python (async StonedogRemembers + synchronous Store)"
 authors = [
     {name = "Jesse Stone",email = "jesse@stonedogcode.com"}
 ]
@@ -14,7 +14,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-packages = [{ include = "roz_remembers.py", from = "src" }]
+packages = [{ include = "stonedog_remembers.py", from = "src" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.0"
@@ -26,14 +26,14 @@ isort = "^6.0.1"
 flake8 = "^7.2.0"
 
 [tool.pytest.ini_options]
-addopts = "-ra -q --cov=roz_remembers --cov-report=term-missing --cov-fail-under=90"
+addopts = "-ra -q --cov=stonedog_remembers --cov-report=term-missing --cov-fail-under=90"
 pythonpath = ["src"]
 testpaths = [
     "tests",
 ]
 
 [tool.coverage.run]
-source = ["roz_remembers"]
+source = ["stonedog_remembers"]
 
 [tool.coverage.report]
 fail_under = 90
