@@ -1,4 +1,4 @@
-# roz-remembers
+# stonedog-remembers
 
 A small, message-driven state management library for Python, inspired by the
 predictable state-container pattern popularized by Redux. It gives you a
@@ -10,7 +10,7 @@ It ships **two front ends over the same dot-path engine**:
 
 * **`Store`** — a *synchronous* store. Best for ordinary synchronous code that
   just wants central, observable runtime state without an event loop.
-* **`RozRemembers`** — an *asyncio*, Redux-style store driven by an action queue
+* **`StonedogRemembers`** — an *asyncio*, Redux-style store driven by an action queue
   and an event queue. Best for long-running async applications.
 
 Both share the exported helpers `get_nested_value(path, data)` and
@@ -19,13 +19,13 @@ Both share the exported helpers `get_nested_value(path, data)` and
 ## Installation
 
 ```bash
-pip install roz-remembers
+pip install stonedog-remembers
 ```
 
-The import name is `roz_remembers`:
+The import name is `stonedog_remembers`:
 
 ```python
-from roz_remembers import Store, RozRemembers, get_nested_value, set_nested_value
+from stonedog_remembers import Store, StonedogRemembers, get_nested_value, set_nested_value
 ```
 
 ## Dot-path convention
@@ -44,7 +44,7 @@ dot-separated `path`:
 ## Quickstart — `Store` (synchronous)
 
 ```python
-from roz_remembers import Store
+from stonedog_remembers import Store
 
 store = Store({"job": {"bins": 10, "sorted": 0}})
 
@@ -84,18 +84,18 @@ live.save()                              # persists back to state.json
 Loading a missing file or malformed JSON starts from an empty state (a warning
 is logged) rather than raising, so a first run "just works".
 
-## Quickstart — `RozRemembers` (asynchronous)
+## Quickstart — `StonedogRemembers` (asynchronous)
 
-`RozRemembers` processes **actions** off a queue and emits **events** onto
+`StonedogRemembers` processes **actions** off a queue and emits **events** onto
 another queue. You dispatch `SET_STATE` actions and consume `STATE_CHANGED`
 events.
 
 ```python
 import asyncio
-from roz_remembers import RozRemembers
+from stonedog_remembers import StonedogRemembers
 
 async def main():
-    store = RozRemembers("initial_state.json")
+    store = StonedogRemembers("initial_state.json")
     await store.load_initial_state()      # empty state if the file is absent
     store.start_processing()              # start the background action processor
 
@@ -103,7 +103,7 @@ async def main():
     events = store.subscribe_events()     # an asyncio.Queue of event dicts
 
     await store.dispatch({
-        "type": RozRemembers.ACTION_TYPE_SET_STATE,   # "SET_STATE"
+        "type": StonedogRemembers.ACTION_TYPE_SET_STATE,   # "SET_STATE"
         "path": "user.theme",
         "value": "dark",
     })
@@ -125,7 +125,7 @@ asyncio.run(main())
   every subscriber callback with a `STATE_CHANGED` event
   (`{"type", "path", "old_value", "new_value"}`). A raising subscriber is
   logged and isolated — it won't break the store or other subscribers.
-* **`RozRemembers`** is **asynchronous**: `subscribe_events()` returns an
+* **`StonedogRemembers`** is **asynchronous**: `subscribe_events()` returns an
   `asyncio.Queue`. Each applied `SET_STATE` puts a `STATE_CHANGED` event (which
   also carries `action_source`) on that queue for your consumer coroutine to
   `await`. Actions with no `path`, unknown action types, and writes that can't
@@ -141,8 +141,28 @@ pytest        # runs the suite and enforces >=90% line coverage
 ```
 
 `pythonpath = ["src"]` is set in `pyproject.toml`, so tests import
-`roz_remembers` directly without a manual `PYTHONPATH`.
+`stonedog_remembers` directly without a manual `PYTHONPATH`.
 
 ## License
 
 MIT
+
+## Renamed from `roz-remembers`
+
+This library was published as **`roz-remembers`** through 0.2.0. It is the same
+library under the StoneDogCode name: the distribution is now
+`stonedog-remembers`, the import is `stonedog_remembers`, and the async store
+class is `StonedogRemembers`.
+
+```python
+from roz_remembers import RozRemembers            # before
+from stonedog_remembers import StonedogRemembers  # now
+```
+
+`RozRemembers` remains exported as a deprecated alias — it is the *same object*,
+not a subclass, so `isinstance` checks and the `ACTION_TYPE_*` / `EVENT_TYPE_*`
+class attributes behave identically either way.
+
+The old [`roz-remembers`](https://pypi.org/project/roz-remembers/) distribution
+stays on PyPI so existing installs keep working, but it receives no further
+releases.

@@ -1,4 +1,4 @@
-"""Tests for the asynchronous, Redux-style :class:`RozRemembers` store.
+"""Tests for the asynchronous, Redux-style :class:`StonedogRemembers` store.
 
 These focus on the branches that the basic lifecycle tests don't reach:
 the event stream, load-failure fallbacks, processor start/stop guards, and
@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from roz_remembers import RozRemembers
+from stonedog_remembers import StonedogRemembers
 
 
 async def _drain_event(store, timeout=1.0):
@@ -21,7 +21,7 @@ async def _drain_event(store, timeout=1.0):
 @pytest.mark.asyncio
 async def test_load_initial_state_missing_file(tmp_path):
     """A missing state file logs a warning and yields an empty state."""
-    store = RozRemembers(str(tmp_path / "does_not_exist.json"))
+    store = StonedogRemembers(str(tmp_path / "does_not_exist.json"))
     await store.load_initial_state()
     assert store.get_current_state() == {}
 
@@ -31,7 +31,7 @@ async def test_load_initial_state_invalid_json(tmp_path):
     """Malformed JSON falls back to an empty state instead of raising."""
     bad = tmp_path / "bad.json"
     bad.write_text("{ this is not json ")
-    store = RozRemembers(str(bad))
+    store = StonedogRemembers(str(bad))
     await store.load_initial_state()
     assert store.get_current_state() == {}
 
@@ -41,7 +41,7 @@ async def test_load_initial_state_unexpected_error(tmp_path):
     """A non-IO/JSON error while loading is swallowed to an empty state."""
     # Point the store at a directory: open(..., 'r') raises IsADirectoryError,
     # which is neither FileNotFoundError nor JSONDecodeError -> generic branch.
-    store = RozRemembers(str(tmp_path))
+    store = StonedogRemembers(str(tmp_path))
     await store.load_initial_state()
     assert store.get_current_state() == {}
 
@@ -52,17 +52,17 @@ async def test_dispatch_emits_state_changed_event(tmp_path):
     state_file = tmp_path / "state.json"
     state_file.write_text(json.dumps({"user": {"theme": "dark"}}))
 
-    store = RozRemembers(str(state_file))
+    store = StonedogRemembers(str(state_file))
     await store.load_initial_state()
     events = store.subscribe_events()
     store.start_processing()
 
     await store.dispatch(
-        {"type": RozRemembers.ACTION_TYPE_SET_STATE, "path": "user.theme", "value": "light"}
+        {"type": StonedogRemembers.ACTION_TYPE_SET_STATE, "path": "user.theme", "value": "light"}
     )
 
     event = await asyncio.wait_for(events.get(), 1.0)
-    assert event["type"] == RozRemembers.EVENT_TYPE_STATE_CHANGED
+    assert event["type"] == StonedogRemembers.EVENT_TYPE_STATE_CHANGED
     assert event["path"] == "user.theme"
     assert event["old_value"] == "dark"
     assert event["new_value"] == "light"
@@ -74,12 +74,12 @@ async def test_dispatch_emits_state_changed_event(tmp_path):
 @pytest.mark.asyncio
 async def test_dispatch_missing_path_is_ignored(tmp_path):
     """A SET_STATE action without 'path' is skipped and emits no event."""
-    store = RozRemembers(str(tmp_path / "s.json"))
+    store = StonedogRemembers(str(tmp_path / "s.json"))
     await store.load_initial_state()
     events = store.subscribe_events()
     store.start_processing()
 
-    await store.dispatch({"type": RozRemembers.ACTION_TYPE_SET_STATE, "value": 1})
+    await store.dispatch({"type": StonedogRemembers.ACTION_TYPE_SET_STATE, "value": 1})
     await asyncio.sleep(0.05)
 
     assert events.empty()
@@ -93,14 +93,14 @@ async def test_dispatch_failed_apply_emits_no_event(tmp_path):
     state_file = tmp_path / "s.json"
     state_file.write_text(json.dumps({"items": [1, 2]}))
 
-    store = RozRemembers(str(state_file))
+    store = StonedogRemembers(str(state_file))
     await store.load_initial_state()
     events = store.subscribe_events()
     store.start_processing()
 
     # list index out of range -> set_nested_value returns False
     await store.dispatch(
-        {"type": RozRemembers.ACTION_TYPE_SET_STATE, "path": "items.9", "value": "x"}
+        {"type": StonedogRemembers.ACTION_TYPE_SET_STATE, "path": "items.9", "value": "x"}
     )
     await asyncio.sleep(0.05)
 
@@ -112,7 +112,7 @@ async def test_dispatch_failed_apply_emits_no_event(tmp_path):
 @pytest.mark.asyncio
 async def test_dispatch_unknown_action_type_is_ignored(tmp_path):
     """An unrecognized action type produces no state change and no event."""
-    store = RozRemembers(str(tmp_path / "s.json"))
+    store = StonedogRemembers(str(tmp_path / "s.json"))
     await store.load_initial_state()
     events = store.subscribe_events()
     store.start_processing()
@@ -128,7 +128,7 @@ async def test_dispatch_unknown_action_type_is_ignored(tmp_path):
 @pytest.mark.asyncio
 async def test_start_processing_is_idempotent(tmp_path):
     """Calling start_processing twice does not spawn a second processor task."""
-    store = RozRemembers(str(tmp_path / "s.json"))
+    store = StonedogRemembers(str(tmp_path / "s.json"))
     await store.load_initial_state()
     store.start_processing()
     first_task = store._processing_task
@@ -140,7 +140,7 @@ async def test_start_processing_is_idempotent(tmp_path):
 @pytest.mark.asyncio
 async def test_stop_processing_without_start_is_noop(tmp_path):
     """Stopping a store that was never started is safe."""
-    store = RozRemembers(str(tmp_path / "s.json"))
+    store = StonedogRemembers(str(tmp_path / "s.json"))
     await store.load_initial_state()
     await store.stop_processing()  # no task -> should not raise
 
@@ -150,9 +150,18 @@ async def test_get_current_state_returns_copy(tmp_path):
     """get_current_state hands back a deep copy; mutating it is harmless."""
     state_file = tmp_path / "s.json"
     state_file.write_text(json.dumps({"a": {"b": 1}}))
-    store = RozRemembers(str(state_file))
+    store = StonedogRemembers(str(state_file))
     await store.load_initial_state()
 
     snapshot = store.get_current_state()
     snapshot["a"]["b"] = 999
     assert store.get_current_state()["a"]["b"] == 1
+
+
+def test_rozremembers_is_a_deprecated_alias():
+    # The class shipped as RozRemembers while the library was roz-remembers.
+    # It must stay importable and be the *same object*, so isinstance checks and
+    # the ACTION_TYPE_*/EVENT_TYPE_* class attributes behave identically.
+    from stonedog_remembers import RozRemembers, StonedogRemembers
+
+    assert RozRemembers is StonedogRemembers

@@ -1,8 +1,8 @@
-"""roz-remembers: a small, message-driven state management library for Python.
+"""stonedog-remembers: a small, message-driven state management library for Python.
 
 Two front ends share the same dot-path engine:
 
-* :class:`RozRemembers` — the original asyncio, Redux-style store driven by an
+* :class:`StonedogRemembers` — the original asyncio, Redux-style store driven by an
   action queue and an event queue. Best for long-running async applications.
 * :class:`Store` — a synchronous facade with the same dot-path semantics. Best
   for synchronous code (e.g. the card-sorter device loop) that just needs a
@@ -16,12 +16,13 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 # A library must never configure the root logger (that's the application's job,
-# e.g. via roz-logs). Attach a NullHandler so our own records don't emit
+# e.g. via stonedog-logs). Attach a NullHandler so our own records don't emit
 # "No handlers could be found" warnings when the app hasn't configured logging.
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 __all__ = [
+    "StonedogRemembers",
     "RozRemembers",
     "Store",
     "get_nested_value",
@@ -100,7 +101,7 @@ def set_nested_value(path: str, value: Any, data: Dict[str, Any]) -> bool:
     return True
 
 
-class RozRemembers:
+class StonedogRemembers:
     """
     A generic, message-driven state management library inspired by Redux.
     It manages a central state, processes incoming actions/commands, and
@@ -137,9 +138,9 @@ class RozRemembers:
     def start_processing(self):
         if self._processing_task is None or self._processing_task.done():
             self._processing_task = asyncio.create_task(self._action_processor())
-            logger.info("RozRemembers action processor started.")
+            logger.info("StonedogRemembers action processor started.")
         else:
-            logger.warning("RozRemembers action processor already running.")
+            logger.warning("StonedogRemembers action processor already running.")
 
     async def stop_processing(self):
         if self._processing_task and not self._processing_task.done():
@@ -148,7 +149,7 @@ class RozRemembers:
                 await self._processing_task
             except asyncio.CancelledError:
                 pass
-            logger.info("RozRemembers action processor stopped.")
+            logger.info("StonedogRemembers action processor stopped.")
 
     async def _action_processor(self):
         logger.info("Action processor is running, waiting for actions...")
@@ -224,7 +225,7 @@ class Store:
     """A synchronous, observable state container with dot-path access.
 
     Designed for synchronous code that wants centralized, predictable runtime
-    state without an asyncio event loop. Mirrors :class:`RozRemembers`'
+    state without an asyncio event loop. Mirrors :class:`StonedogRemembers`'
     dot-path semantics and ``STATE_CHANGED`` event shape.
 
     Example::
@@ -321,3 +322,16 @@ class Store:
         with open(target, 'w') as f:
             json.dump(self._state, f, indent=2, default=str)
         logger.debug(f"Store saved state to: {target}")
+
+
+# ---------------------------------------------------------------------------
+# Backwards compatibility
+# ---------------------------------------------------------------------------
+
+#: Deprecated alias for :class:`StonedogRemembers`.
+#:
+#: The class was named ``RozRemembers`` while this library was published as
+#: ``roz-remembers``. It is kept as a plain alias -- not a subclass -- so
+#: ``isinstance`` checks and ``ACTION_TYPE_*``/``EVENT_TYPE_*`` class attributes
+#: behave identically either way. Prefer ``StonedogRemembers`` in new code.
+RozRemembers = StonedogRemembers

@@ -4,7 +4,7 @@ Covers list-index traversal, out-of-range / non-container failures, and the
 Store's load-failure fallbacks that the happy-path tests don't reach.
 """
 
-from roz_remembers import Store, get_nested_value, set_nested_value
+from stonedog_remembers import Store, get_nested_value, set_nested_value
 
 
 # --- get_nested_value --------------------------------------------------------
