@@ -23,8 +23,21 @@ concurrency:
 
 jobs:
   build_and_test:
-    name: Build & Test
+    name: Build & Test (py${{ matrix.python-version }})
     runs-on: ubuntu-latest # Use a standard Ubuntu runner
+
+    # NEH-281: the single `python-version: '3.10'` pin matched nothing in
+    # particular -- `pyproject.toml` declares `requires-python = ">=3.9,<4.0"`,
+    # so 3.10 was neither the floor nor the ceiling of what this package claims
+    # to support. A matrix over the two ends is the honest statement of that
+    # range; both were run locally against this commit (40 passed, 98.37% on
+    # 3.9 and 98.38% on 3.13). The interior versions are not enumerated on
+    # purpose: this is a pure-Python, dependency-free library, so a break that
+    # hits only 3.11 while 3.9 and 3.13 stay green is not a failure mode it has.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.13']
 
     steps:
       # No explicit `ref`. The default is right for every trigger: the pushed
@@ -34,29 +47,58 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      # Poetry runs on THIS interpreter, not the one under test. Poetry 2.x
+      # requires Python >= 3.10, so installing it under the 3.9 matrix leg dies
+      # with "Poetry installation failed" before a single test runs -- the trap
+      # stonedog-logs hit on its own first hosted run.
+      - name: Set up Python for Poetry
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # Or any specific Python version your project requires (e.g., '3.9', '3.11')
+          python-version: '3.12'
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
           virtualenvs-create: true
-          virtualenvs-in-project: true 
+          virtualenvs-in-project: true
 
-      - name: Configure Poetry for PATH
+      # The interpreter under test, installed second so Poetry is already in
+      # place, then handed to Poetry explicitly by absolute path. This is what
+      # replaces the deleted `Configure Poetry for PATH` step: that step ran
+      # before any virtualenv existed, so `poetry env info -p` printed an empty
+      # string and it appended the literal `/bin` to $GITHUB_PATH. $GITHUB_PATH
+      # entries are PREPENDED, so `/bin/python3` -- the runner's system 3.12 --
+      # shadowed the setup-python shim for every later step and Poetry built
+      # its venv from that. The workflow said 3.10 and the suite ran on 3.12.3.
+      - name: Set up the interpreter under test
+        uses: actions/setup-python@v5
+        id: target-python
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build the project venv on the interpreter under test
+        run: poetry env use "${{ steps.target-python.outputs.python-path }}"
+
+      # The evidence, in the run log, that the pin is real. A reasoning
+      # argument about the YAML is exactly what failed to catch NEH-281: the
+      # file said one thing and the runner did another for months. `poetry run
+      # python -VV` must report ${{ matrix.python-version }}; pytest's coverage
+      # header then says the same thing independently.
+      - name: Report the interpreters in play
         run: |
-          echo "POETRY_HOME=$(poetry env info -p)/bin" >> $GITHUB_ENV
-          echo "$(poetry env info -p)/bin" >> $GITHUB_PATH
-      - name: Set PYTHONPATH for src directory
-        run: echo "PYTHONPATH=$GITHUB_WORKSPACE/src" >> $GITHUB_ENV
-      
+          echo "PATH python:      $(python -VV 2>&1)"
+          echo "poetry venv:      $(poetry run python -VV 2>&1)"
+          echo "expected (matrix): ${{ matrix.python-version }}"
+
       - name: Install project in editable mode
         run: poetry install --with dev # with dev installs development dependencies
 
+      # No PYTHONPATH here or in the environment: `pyproject.toml` already sets
+      # `pythonpath = ["src"]` under [tool.pytest.ini_options], so the deleted
+      # `Set PYTHONPATH for src directory` step and the `PYTHONPATH=src` prefix
+      # were both redundant.
       - name: Run tests with pytest
-        run: PYTHONPATH=src poetry run pytest # Execute your tests using Poetry's run command
+        run: poetry run pytest # Execute your tests using Poetry's run command
 
   create_pr_and_merge:
     name: Create PR & Merge to Main
